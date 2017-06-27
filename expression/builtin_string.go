@@ -385,9 +385,10 @@ type repeatFunctionClass struct {
 }
 
 func (c *repeatFunctionClass) getFunction(args []Expression, ctx context.Context) (builtinFunc, error) {
-	resultTp := types.NewFieldType(mysql.TypeString)
-	types.SetBinChsClnFlag(resultTp)
-	bf, err := newBaseBuiltinFuncWithTp(args, resultTp, ctx, tpString, tpInt)
+	tp := types.NewFieldType(mysql.TypeString)
+	tp.Flen = mysql.MaxBlobWidth
+	types.SetBinChsClnFlag(tp)
+	bf, err := newBaseBuiltinFuncWithTp(args, tp, ctx, tpString, tpInt)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -411,11 +412,19 @@ func (b *builtinRepeatSig) evalString(row []types.Datum) (d string, isNull bool,
 		return "", isNull, errors.Trace(err)
 	}
 
-	ch := fmt.Sprintf("%v", str)
 	if num < 1 {
 		return "", false, nil
 	}
-	return strings.Repeat(ch, int(num)), false, nil
+
+	if num > 0x7FFFFFFF {
+		num = 0x7FFFFFFF
+	}
+
+	if int64(len(str)) > int64(b.tp.Flen)/num {
+		return "", true, nil
+	}
+
+	return strings.Repeat(str, int(num)), false, nil
 }
 
 type lowerFunctionClass struct {
